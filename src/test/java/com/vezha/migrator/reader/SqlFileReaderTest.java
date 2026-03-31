@@ -35,4 +35,32 @@ class SqlFileReaderTest {
             Files.deleteIfExists(sourceSql);
         }
     }
+
+    @Test
+    void loadsDbeaverStyleMultiRowInsertWithEscapedAndDoubledQuotes() throws IOException {
+        Path sourceSql = Path.of("source.sql");
+        Files.writeString(sourceSql, """
+                CREATE TABLE events (id INT PRIMARY KEY, payload VARCHAR(255));
+                INSERT INTO events(id, payload) VALUES
+                    (1, 'simple value'),
+                    (2, 'O''Reilly export'),
+                    (3, 'DBeaver \\\'quoted\\\' value; semicolon inside');
+                """);
+
+        ConfigModel configModel = new ConfigModel();
+        configModel.getSource().getSqlFile().setEnabled(true);
+
+        try {
+            JdbcTemplate source = new SqlFileReader().read(configModel);
+            Integer count = source.queryForObject("SELECT COUNT(*) FROM events", Integer.class);
+            String second = source.queryForObject("SELECT payload FROM events WHERE id = 2", String.class);
+            String third = source.queryForObject("SELECT payload FROM events WHERE id = 3", String.class);
+
+            assertEquals(3, count);
+            assertEquals("O'Reilly export", second);
+            assertEquals("DBeaver 'quoted' value; semicolon inside", third);
+        } finally {
+            Files.deleteIfExists(sourceSql);
+        }
+    }
 }
