@@ -59,13 +59,12 @@ public class SqlFileReader implements SourceReader {
     }
 
     private String normalizeForH2(String statement) {
-        String normalized = statement
+        return statement
+                .replace("\\'", "''")
                 .replaceAll("(?i)\\s+CHARACTER\\s+SET\\s+\\w+", "")
                 .replaceAll("(?i)\\s+COLLATE\\s+\\w+", "")
                 .replaceAll("(?i)b'([01])'", "$1")
                 .replaceAll("(?i)\\)\\s*ENGINE\\s*=\\s*\\w+.*$", ")");
-
-        return normalized;
     }
 
     private List<String> splitStatements(String content) {
@@ -75,9 +74,17 @@ public class SqlFileReader implements SourceReader {
 
         for (int i = 0; i < content.length(); i++) {
             char c = content.charAt(i);
-            if (c == '\'') {
+
+            if (c == '\'' && !isEscapedByBackslash(content, i)) {
+                if (inString && i + 1 < content.length() && content.charAt(i + 1) == '\'') {
+                    current.append(c);
+                    current.append(content.charAt(i + 1));
+                    i++;
+                    continue;
+                }
                 inString = !inString;
             }
+
             if (c == ';' && !inString) {
                 addStatement(statements, current.toString());
                 current.setLength(0);
@@ -88,6 +95,14 @@ public class SqlFileReader implements SourceReader {
 
         addStatement(statements, current.toString());
         return statements;
+    }
+
+    private boolean isEscapedByBackslash(String content, int quoteIndex) {
+        int backslashCount = 0;
+        for (int i = quoteIndex - 1; i >= 0 && content.charAt(i) == '\\'; i--) {
+            backslashCount++;
+        }
+        return backslashCount % 2 != 0;
     }
 
     private void addStatement(List<String> statements, String raw) {
