@@ -35,6 +35,7 @@ class MigrationOrchestratorTest {
         JdbcTemplate sourceJdbc = mock(JdbcTemplate.class);
         JdbcTemplate destinationJdbc = mock(JdbcTemplate.class);
         when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+        when(destinationJdbc.queryForObject(anyString(), eq(Boolean.class), anyString(), anyString())).thenReturn(true);
 
         IdToUuidResolver idResolver = mock(IdToUuidResolver.class);
         StreamToAnalyticsResolver analyticsResolver = mock(StreamToAnalyticsResolver.class);
@@ -69,9 +70,9 @@ class MigrationOrchestratorTest {
         verify(settingsMigrator, times(1)).migrate();
         verify(eventManagerMigrator, never()).migrate();
 
-        verify(destinationJdbc, times(1)).execute("SELECT setval(pg_get_serial_sequence('videoanalytics.clients', 'id'), 10)");
-        verify(destinationJdbc, times(1)).execute("SELECT setval(pg_get_serial_sequence('videoanalytics.alpr_stats_hourly', 'id'), 10)");
-        verify(destinationJdbc, never()).execute("SELECT setval(pg_get_serial_sequence('videoanalytics.system_settings', 'id'), 10)");
+        verify(destinationJdbc, times(1)).execute("SELECT setval(pg_get_serial_sequence('videoanalytics.clients', 'id'), 10, true)");
+        verify(destinationJdbc, times(1)).execute("SELECT setval(pg_get_serial_sequence('videoanalytics.alpr_stats_hourly', 'id'), 10, true)");
+        verify(destinationJdbc, never()).execute("SELECT setval(pg_get_serial_sequence('videoanalytics.system_settings', 'id'), 10, true)");
     }
 
     @Test
@@ -79,6 +80,7 @@ class MigrationOrchestratorTest {
         JdbcTemplate sourceJdbc = mock(JdbcTemplate.class);
         JdbcTemplate destinationJdbc = mock(JdbcTemplate.class);
         when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+        when(destinationJdbc.queryForObject(anyString(), eq(Boolean.class), anyString(), anyString())).thenReturn(true);
 
         SourceSchemaInspector sourceSchemaInspector = mock(SourceSchemaInspector.class);
         when(sourceSchemaInspector.tableExists(anyString())).thenReturn(true);
@@ -109,6 +111,7 @@ class MigrationOrchestratorTest {
         JdbcTemplate sourceJdbc = mock(JdbcTemplate.class);
         JdbcTemplate destinationJdbc = mock(JdbcTemplate.class);
         when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+        when(destinationJdbc.queryForObject(anyString(), eq(Boolean.class), anyString(), anyString())).thenReturn(true);
 
         SourceSchemaInspector sourceSchemaInspector = mock(SourceSchemaInspector.class);
         when(sourceSchemaInspector.tableExists("clients")).thenReturn(false);
@@ -138,6 +141,7 @@ class MigrationOrchestratorTest {
         JdbcTemplate sourceJdbc = mock(JdbcTemplate.class);
         JdbcTemplate destinationJdbc = mock(JdbcTemplate.class);
         when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+        when(destinationJdbc.queryForObject(anyString(), eq(Boolean.class), anyString(), anyString())).thenReturn(true);
 
         SourceSchemaInspector sourceSchemaInspector = mock(SourceSchemaInspector.class);
         when(sourceSchemaInspector.tableExists(anyString())).thenReturn(true);

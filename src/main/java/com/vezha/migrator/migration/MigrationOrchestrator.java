@@ -10,6 +10,7 @@ import com.vezha.migrator.util.StreamToAnalyticsResolver;
 import com.vezha.migrator.util.TargetSchemaInspector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
@@ -171,12 +172,32 @@ public class MigrationOrchestrator {
     }
 
     private void resetPostgresSequence(String schema, String table) {
+        Boolean numericId;
+        try {
+            numericId = destinationJdbcTemplate.queryForObject(
+                    "SELECT data_type IN ('smallint','integer','bigint') " +
+                            "FROM information_schema.columns " +
+                            "WHERE table_schema = ? AND table_name = ? AND column_name = 'id'",
+                    Boolean.class,
+                    schema,
+                    table
+            );
+        } catch (EmptyResultDataAccessException ignored) {
+            return;
+        }
+        if (!Boolean.TRUE.equals(numericId)) {
+            return;
+        }
+
         Long maxId = destinationJdbcTemplate.queryForObject(
                 "SELECT COALESCE(MAX(id), 0) FROM " + schema + "." + table,
                 Long.class
         );
+        long sequenceValue = (maxId != null && maxId > 0) ? maxId : 1L;
+        boolean isCalled = maxId != null && maxId > 0;
         destinationJdbcTemplate.execute(
-                "SELECT setval(pg_get_serial_sequence('" + schema + "." + table + "', 'id'), " + maxId + ")"
+                "SELECT setval(pg_get_serial_sequence('" + schema + "." + table + "', 'id'), "
+                        + sequenceValue + ", " + isCalled + ")"
         );
     }
 
