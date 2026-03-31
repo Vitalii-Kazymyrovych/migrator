@@ -1,4 +1,4 @@
-# Claude Code Instructions
+# AI Agent Instructions
 
 ## Project
 Java 17 / Spring Boot CLI application for VideoAnalytics database migration (old MySQL schema → new PostgreSQL schema).

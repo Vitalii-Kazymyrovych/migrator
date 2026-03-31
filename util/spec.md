@@ -947,7 +947,7 @@ org.mockito:mockito-core
 
 ---
 
-## 12. Token-Saving Subtask Breakdown for Claude Code
+## 12. Token-Saving Subtask Breakdown for AI Agent
 
 Subtask 1: ConfigModel, AppConfig, DataSourceFactory, IdToUuidResolver, StreamToAnalyticsResolver, BatchInserter, MigrationOrchestrator (shell + sequence reset logic) + all corresponding tests.
 Subtask 2: All simple direct migrators: clients, streams, roles, servers, event_manager, settings, alpr_list_items, gun_type_mapping, smoke_fire_type_mapping, object_in_zone_object_type, zone_exit_notifications_object_type + all corresponding tests.
@@ -957,7 +957,7 @@ Subtask 5: All remaining migrators: traffic_stat, stats_traffic (merge of two ol
 Subtask 6: face_lists, face_list_items, FaceImageOrganizer, SqlFileReader, wiring in MigratorApplication, README + all corresponding tests.
 
 **General tips:**
-- Maintain a `CLAUDE.md` in the repo root with: package structure, resolver API signatures, key config model fields. Claude Code reads this automatically without consuming prompt tokens.
+- Maintain a `AGENTS.md` in the repo root with: package structure, resolver API signatures, key config model fields. AI Agent reads this automatically without consuming prompt tokens.
 - Start each subtask prompt with: "Existing classes: [list]. Implement: [list]. Spec context: [paste relevant sections only]."
 - Never implement more than 5-6 migrators per session.
 - For tests always specify: "Use Mockito for DB. Use H2 for integration. No Docker."
