@@ -28,6 +28,7 @@ public class SqlFileReader implements SourceReader {
 
         JdbcTemplate sourceJdbcTemplate = new JdbcTemplate(dataSource);
         sourceJdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS videoanalytics");
+        sourceJdbcTemplate.execute("SET SCHEMA videoanalytics");
         if (Files.exists(sourceDdlPath())) {
             executeSqlFile(sourceJdbcTemplate, sourceDdlPath().toString());
         }
@@ -50,7 +51,8 @@ public class SqlFileReader implements SourceReader {
                 try {
                     jdbcTemplate.execute(normalizeForH2(statement));
                 } catch (DataAccessException ex) {
-                    log.warn("Skipping SQL statement from {} due to parser incompatibility: {}", path, ex.getMessage());
+                    String rootCause = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+                    log.warn("Skipping SQL statement from {} due to parser incompatibility: {} | rootCause={}", path, ex.getMessage(), rootCause);
                 }
             }
         } catch (IOException e) {
@@ -61,9 +63,13 @@ public class SqlFileReader implements SourceReader {
     private String normalizeForH2(String statement) {
         return statement
                 .replace("\\'", "''")
+                .replace("`", "")
                 .replaceAll("(?i)\\s+CHARACTER\\s+SET\\s+\\w+", "")
                 .replaceAll("(?i)\\s+COLLATE\\s+\\w+", "")
                 .replaceAll("(?i)b'([01])'", "$1")
+                .replaceAll("(?im)^\\s*(UNIQUE\\s+)?KEY\\s+[^\\n]*\\n", "")
+                .replaceAll("(?im)^\\s*CONSTRAINT\\s+[^\\n]*FOREIGN\\s+KEY[^\\n]*\\n", "")
+                .replaceAll(",\\s*\\)", ")")
                 .replaceAll("(?i)\\)\\s*ENGINE\\s*=\\s*\\w+.*$", ")");
     }
 
