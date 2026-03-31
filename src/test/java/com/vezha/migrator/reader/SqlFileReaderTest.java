@@ -14,8 +14,8 @@ class SqlFileReaderTest {
 
     @Test
     void loadsSqlFileIntoInMemorySourceDatabase() throws IOException {
-        Path sqlFile = Files.createTempFile("source", ".sql");
-        Files.writeString(sqlFile, """
+        Path sourceSql = Path.of("source.sql");
+        Files.writeString(sourceSql, """
                 -- table setup
                 CREATE TABLE clients (id INT PRIMARY KEY, name VARCHAR(50));
                 INSERT INTO clients(id, name) VALUES (1, 'Acme');
@@ -23,13 +23,16 @@ class SqlFileReaderTest {
 
         ConfigModel configModel = new ConfigModel();
         configModel.getSource().getSqlFile().setEnabled(true);
-        configModel.getSource().getSqlFile().setPath(sqlFile.toString());
 
-        JdbcTemplate source = new SqlFileReader().read(configModel);
-        Integer count = source.queryForObject("SELECT COUNT(*) FROM clients", Integer.class);
-        String name = source.queryForObject("SELECT name FROM clients WHERE id = 1", String.class);
+        try {
+            JdbcTemplate source = new SqlFileReader().read(configModel);
+            Integer count = source.queryForObject("SELECT COUNT(*) FROM clients", Integer.class);
+            String name = source.queryForObject("SELECT name FROM clients WHERE id = 1", String.class);
 
-        assertEquals(1, count);
-        assertEquals("Acme", name);
+            assertEquals(1, count);
+            assertEquals("Acme", name);
+        } finally {
+            Files.deleteIfExists(sourceSql);
+        }
     }
 }

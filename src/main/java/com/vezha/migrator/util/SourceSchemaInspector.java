@@ -15,6 +15,8 @@ import java.util.regex.Pattern;
 
 public class SourceSchemaInspector {
 
+    private static final Path SOURCE_SQL_PATH = Path.of("source.sql");
+
     private static final Pattern CREATE_TABLE_PATTERN = Pattern.compile(
             "(?is)\\bcreate\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?([`\"\\[]?[a-zA-Z0-9_.$]+[`\"\\]]?)"
     );
@@ -28,7 +30,7 @@ public class SourceSchemaInspector {
 
     public void load(ConfigModel configModel) {
         if (configModel.getSource().getSqlFile().isEnabled()) {
-            tables = parseSqlFileTables(configModel.getSource().getSqlFile().getPath());
+            tables = parseSqlFileTables(SOURCE_SQL_PATH.toString());
             return;
         }
 

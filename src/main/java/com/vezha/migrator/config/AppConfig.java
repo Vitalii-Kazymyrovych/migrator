@@ -107,10 +107,6 @@ public class AppConfig {
             requireNonBlank(missing, source.getH2().getUsername(), "source.h2.username");
         }
 
-        if (source.getSqlFile().isEnabled()) {
-            requireNonBlank(missing, source.getSqlFile().getPath(), "source.sqlFile.path");
-        }
-
         if (destination.getPostgres().isEnabled()) {
             requireNonBlank(missing, destination.getPostgres().getHost(), "destination.postgres.host");
             requireNonBlank(missing, destination.getPostgres().getDatabase(), "destination.postgres.database");

@@ -12,6 +12,8 @@ import java.util.List;
 
 public class SqlFileReader implements SourceReader {
 
+    private static final Path SOURCE_SQL_PATH = Path.of("source.sql");
+
     @Override
     public JdbcTemplate read(ConfigModel configModel) {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
@@ -20,8 +22,12 @@ public class SqlFileReader implements SourceReader {
         dataSource.setPassword("");
 
         JdbcTemplate sourceJdbcTemplate = new JdbcTemplate(dataSource);
-        executeSqlFile(sourceJdbcTemplate, configModel.getSource().getSqlFile().getPath());
+        executeSqlFile(sourceJdbcTemplate, sourceSqlPath().toString());
         return sourceJdbcTemplate;
+    }
+
+    private Path sourceSqlPath() {
+        return SOURCE_SQL_PATH;
     }
 
     void executeSqlFile(JdbcTemplate jdbcTemplate, String path) {
