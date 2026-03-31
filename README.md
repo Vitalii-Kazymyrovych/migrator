@@ -14,6 +14,8 @@ Place `config.json` in the same folder as `db-migrator.jar`, then run:
 java -jar db-migrator.jar
 ```
 
+If `source.sqlFile.enabled=true`, also place `source.sql` in the same folder as `db-migrator.jar`.
+
 ## `config.json` example (annotated)
 
 ```json
@@ -21,7 +23,7 @@ java -jar db-migrator.jar
   "source": {
     "sqlFile": {
       "enabled": false,
-      "path": "./source.sql" // used only when source.sqlFile.enabled=true
+      "path": "" // ignored; source.sql is always read from the jar folder when enabled
     },
     "mysql": {
       "enabled": true,

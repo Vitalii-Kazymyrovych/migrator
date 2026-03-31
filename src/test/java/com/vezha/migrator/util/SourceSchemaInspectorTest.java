@@ -80,21 +80,25 @@ class SourceSchemaInspectorTest {
 
     @Test
     void parsesTableNamesFromSqlFileCreateStatements() throws Exception {
-        Path sqlFile = tempDir.resolve("source.sql");
-        Files.writeString(sqlFile,
+        Path sourceSql = Path.of("source.sql");
+        Files.writeString(sourceSql,
                 "CREATE TABLE clients (id INT);\n"
                         + "create table IF NOT EXISTS `alpr_notifications` (id INT);\n"
                         + "CREATE TABLE analytics.alpr_plates (id INT);\n"
                         + "CREATE TABLE \"stats_traffic_hourly\" (id INT);\n");
 
-        SourceSchemaInspector inspector = new SourceSchemaInspector(mock(JdbcTemplate.class));
-        inspector.load(sqlFileConfig(sqlFile));
+        try {
+            SourceSchemaInspector inspector = new SourceSchemaInspector(mock(JdbcTemplate.class));
+            inspector.load(sqlFileConfig());
 
-        assertTrue(inspector.tableExists("clients"));
-        assertTrue(inspector.tableExists("alpr_notifications"));
-        assertTrue(inspector.tableExists("alpr_plates"));
-        assertTrue(inspector.tableExists("stats_traffic_hourly"));
-        assertFalse(inspector.tableExists("missing_table"));
+            assertTrue(inspector.tableExists("clients"));
+            assertTrue(inspector.tableExists("alpr_notifications"));
+            assertTrue(inspector.tableExists("alpr_plates"));
+            assertTrue(inspector.tableExists("stats_traffic_hourly"));
+            assertFalse(inspector.tableExists("missing_table"));
+        } finally {
+            Files.deleteIfExists(sourceSql);
+        }
     }
 
     private ConfigModel mysqlConfig(String database) {
@@ -130,10 +134,9 @@ class SourceSchemaInspectorTest {
         return model;
     }
 
-    private ConfigModel sqlFileConfig(Path path) {
+    private ConfigModel sqlFileConfig() {
         ConfigModel model = baseConfig();
         model.getSource().getSqlFile().setEnabled(true);
-        model.getSource().getSqlFile().setPath(path.toString());
         return model;
     }
 
