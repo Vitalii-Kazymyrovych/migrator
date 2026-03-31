@@ -31,6 +31,11 @@ public class AlprListEventsMigrator extends BaseMigratorSupport implements Table
     }
 
     @Override
+    public List<String> getSourceTables() {
+        return List.of("alpr_notifications", "alpr_plates");
+    }
+
+    @Override
     public void migrate() {
         List<Map<String, Object>> joinedRows = sourceJdbcTemplate.queryForList(
                 "SELECT n.id, n.plate_id, n.list_id, n.list_item_id, n.list_item_name, n.status, n.accepted_by, n.created_at, "

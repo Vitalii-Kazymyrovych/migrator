@@ -3,6 +3,7 @@ package com.vezha.migrator.migration.impl;
 import com.vezha.migrator.migration.TableMigrator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
@@ -29,9 +30,14 @@ public class StatsTrafficMigrator extends BaseMigratorSupport implements TableMi
     }
 
     @Override
+    public List<String> getSourceTables() {
+        return List.of("stats_traffic_hourly", "stats_traffic_minutely");
+    }
+
+    @Override
     public void migrate() {
-        List<Map<String, Object>> hourlyRows = sourceJdbcTemplate.queryForList("SELECT * FROM stats_traffic_hourly");
-        List<Map<String, Object>> minutelyRows = sourceJdbcTemplate.queryForList("SELECT * FROM stats_traffic_minutely");
+        List<Map<String, Object>> hourlyRows = querySourceRows("stats_traffic_hourly");
+        List<Map<String, Object>> minutelyRows = querySourceRows("stats_traffic_minutely");
         log.info("Found {} rows in stats_traffic_hourly", hourlyRows.size());
         log.info("Found {} rows in stats_traffic_minutely", minutelyRows.size());
 
@@ -59,6 +65,15 @@ public class StatsTrafficMigrator extends BaseMigratorSupport implements TableMi
                         row.get("present")
                 )
         );
+    }
+
+    private List<Map<String, Object>> querySourceRows(String tableName) {
+        try {
+            return sourceJdbcTemplate.queryForList("SELECT * FROM " + tableName);
+        } catch (DataAccessException exception) {
+            log.info("Source table {} not available during migration, treating as empty", tableName);
+            return List.of();
+        }
     }
 
     private Map<String, Object> stripId(Map<String, Object> row) {

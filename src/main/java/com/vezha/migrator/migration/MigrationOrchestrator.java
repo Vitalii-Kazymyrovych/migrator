@@ -1,8 +1,11 @@
 package com.vezha.migrator.migration;
 
 import com.vezha.migrator.config.ConfigModel;
+import com.vezha.migrator.migration.impl.AlprListEventsMigrator;
+import com.vezha.migrator.migration.impl.StatsTrafficMigrator;
 import com.vezha.migrator.migration.impl.StreamGroupsMigrator;
 import com.vezha.migrator.util.IdToUuidResolver;
+import com.vezha.migrator.util.SourceSchemaInspector;
 import com.vezha.migrator.util.StreamToAnalyticsResolver;
 import com.vezha.migrator.util.TargetSchemaInspector;
 import org.slf4j.Logger;
@@ -27,6 +30,7 @@ public class MigrationOrchestrator {
     private final JdbcTemplate destinationJdbcTemplate;
     private final IdToUuidResolver idToUuidResolver;
     private final StreamToAnalyticsResolver streamToAnalyticsResolver;
+    private final SourceSchemaInspector sourceSchemaInspector;
     private final TargetSchemaInspector targetSchemaInspector;
     private final List<TableMigrator> migrators;
 
@@ -35,6 +39,7 @@ public class MigrationOrchestrator {
             JdbcTemplate destinationJdbcTemplate,
             IdToUuidResolver idToUuidResolver,
             StreamToAnalyticsResolver streamToAnalyticsResolver,
+            SourceSchemaInspector sourceSchemaInspector,
             TargetSchemaInspector targetSchemaInspector,
             List<TableMigrator> migrators
     ) {
@@ -42,6 +47,7 @@ public class MigrationOrchestrator {
         this.destinationJdbcTemplate = destinationJdbcTemplate;
         this.idToUuidResolver = idToUuidResolver;
         this.streamToAnalyticsResolver = streamToAnalyticsResolver;
+        this.sourceSchemaInspector = sourceSchemaInspector;
         this.targetSchemaInspector = targetSchemaInspector;
         this.migrators = new ArrayList<>(migrators);
     }
@@ -49,17 +55,22 @@ public class MigrationOrchestrator {
     public void run(ConfigModel configModel) {
         idToUuidResolver.load(sourceJdbcTemplate);
         streamToAnalyticsResolver.load(sourceJdbcTemplate);
+        sourceSchemaInspector.load(configModel);
         targetSchemaInspector.load(configModel);
 
         Map<String, ConfigModel.TableConfig> tables = configModel.getMigration().getTables();
         migrators.stream()
                 .filter(migrator -> isEnabled(tables, migrator.tableName()))
-                .forEach(this::runIfTargetTableExists);
+                .forEach(this::runIfTablesExist);
 
         resetSequences(configModel);
     }
 
-    private void runIfTargetTableExists(TableMigrator migrator) {
+    private void runIfTablesExist(TableMigrator migrator) {
+        if (!validateSourceTables(migrator)) {
+            return;
+        }
+
         if (migrator instanceof StreamGroupsMigrator streamGroupsMigrator) {
             if (!targetSchemaInspector.tableExists("stream_groups")) {
                 log.info("Skipping {}: table {} not found in target DB", migrator.getClass().getSimpleName(), "stream_groups");
@@ -80,6 +91,46 @@ public class MigrationOrchestrator {
         }
 
         migrator.migrate();
+    }
+
+    private boolean validateSourceTables(TableMigrator migrator) {
+        if (migrator instanceof AlprListEventsMigrator) {
+            if (!sourceSchemaInspector.tableExists("alpr_notifications")) {
+                log.info("Skipping {}: source table {} not found in source DB", migrator.getClass().getSimpleName(), "alpr_notifications");
+                return false;
+            }
+            if (!sourceSchemaInspector.tableExists("alpr_plates")) {
+                log.warn("{}: source table {} not found in source DB; JOIN will produce no results", migrator.getClass().getSimpleName(), "alpr_plates");
+            }
+            return true;
+        }
+
+        if (migrator instanceof StatsTrafficMigrator) {
+            boolean hasHourly = sourceSchemaInspector.tableExists("stats_traffic_hourly");
+            boolean hasMinutely = sourceSchemaInspector.tableExists("stats_traffic_minutely");
+            if (!hasHourly && !hasMinutely) {
+                log.info("Skipping {}: source table {} not found in source DB", migrator.getClass().getSimpleName(), "stats_traffic_hourly");
+                log.info("Skipping {}: source table {} not found in source DB", migrator.getClass().getSimpleName(), "stats_traffic_minutely");
+                return false;
+            }
+            if (!hasHourly) {
+                log.info("{}: source table {} not found in source DB; migrating from {} only",
+                        migrator.getClass().getSimpleName(), "stats_traffic_hourly", "stats_traffic_minutely");
+            }
+            if (!hasMinutely) {
+                log.info("{}: source table {} not found in source DB; migrating from {} only",
+                        migrator.getClass().getSimpleName(), "stats_traffic_minutely", "stats_traffic_hourly");
+            }
+            return true;
+        }
+
+        for (String sourceTable : migrator.getSourceTables()) {
+            if (!sourceSchemaInspector.tableExists(sourceTable)) {
+                log.info("Skipping {}: source table {} not found in source DB", migrator.getClass().getSimpleName(), sourceTable);
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean isEnabled(Map<String, ConfigModel.TableConfig> tableConfigMap, String table) {

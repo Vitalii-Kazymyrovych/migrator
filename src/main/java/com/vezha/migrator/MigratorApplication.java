@@ -43,6 +43,7 @@ import com.vezha.migrator.reader.DatabaseReader;
 import com.vezha.migrator.reader.SourceReader;
 import com.vezha.migrator.reader.SqlFileReader;
 import com.vezha.migrator.util.IdToUuidResolver;
+import com.vezha.migrator.util.SourceSchemaInspector;
 import com.vezha.migrator.util.StreamToAnalyticsResolver;
 import com.vezha.migrator.util.TargetSchemaInspector;
 import org.slf4j.Logger;
@@ -115,6 +116,7 @@ public class MigratorApplication {
                 destinationJdbcTemplate,
                 idToUuidResolver,
                 streamToAnalyticsResolver,
+                new SourceSchemaInspector(sourceJdbcTemplate),
                 new TargetSchemaInspector(destinationJdbcTemplate),
                 migrators
         );
