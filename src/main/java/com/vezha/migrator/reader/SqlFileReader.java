@@ -1,6 +1,9 @@
 package com.vezha.migrator.reader;
 
 import com.vezha.migrator.config.ConfigModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -11,8 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SqlFileReader implements SourceReader {
+    private static final Logger log = LoggerFactory.getLogger(SqlFileReader.class);
 
     private static final Path SOURCE_SQL_PATH = Path.of("source.sql");
+    private static final Path SOURCE_DDL_PATH = Path.of("oldDDL.md");
 
     @Override
     public JdbcTemplate read(ConfigModel configModel) {
@@ -22,6 +27,10 @@ public class SqlFileReader implements SourceReader {
         dataSource.setPassword("");
 
         JdbcTemplate sourceJdbcTemplate = new JdbcTemplate(dataSource);
+        sourceJdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS videoanalytics");
+        if (Files.exists(sourceDdlPath())) {
+            executeSqlFile(sourceJdbcTemplate, sourceDdlPath().toString());
+        }
         executeSqlFile(sourceJdbcTemplate, sourceSqlPath().toString());
         return sourceJdbcTemplate;
     }
@@ -30,15 +39,33 @@ public class SqlFileReader implements SourceReader {
         return SOURCE_SQL_PATH;
     }
 
+    private Path sourceDdlPath() {
+        return SOURCE_DDL_PATH;
+    }
+
     void executeSqlFile(JdbcTemplate jdbcTemplate, String path) {
         try {
             String content = Files.readString(Path.of(path));
             for (String statement : splitStatements(content)) {
-                jdbcTemplate.execute(statement);
+                try {
+                    jdbcTemplate.execute(normalizeForH2(statement));
+                } catch (DataAccessException ex) {
+                    log.warn("Skipping SQL statement from {} due to parser incompatibility: {}", path, ex.getMessage());
+                }
             }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to read SQL file: " + path, e);
         }
+    }
+
+    private String normalizeForH2(String statement) {
+        String normalized = statement
+                .replaceAll("(?i)\\s+CHARACTER\\s+SET\\s+\\w+", "")
+                .replaceAll("(?i)\\s+COLLATE\\s+\\w+", "")
+                .replaceAll("(?i)b'([01])'", "$1")
+                .replaceAll("(?i)\\)\\s*ENGINE\\s*=\\s*\\w+.*$", ")");
+
+        return normalized;
     }
 
     private List<String> splitStatements(String content) {
