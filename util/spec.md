@@ -949,35 +949,12 @@ org.mockito:mockito-core
 
 ## 12. Token-Saving Subtask Breakdown for Claude Code
 
-### Subtask 1 — Scaffold & Config
-Implement `ConfigModel`, `AppConfig`, `DataSourceFactory`. Tests: `AppConfigTest`, `DataSourceFactoryTest`.
-
-### Subtask 2 — Resolvers & Infrastructure
-Implement `IdToUuidResolver`, `StreamToAnalyticsResolver`, `BatchInserter`, `MigrationOrchestrator` (shell, including sequence reset logic). Tests for all.
-
-### Subtask 3 — Simple Direct Migrators
-`clients`, `streams`, `roles`, `servers`, `event_manager`, `settings->system_settings`, `alpr_list_items`, `gun_type_mapping`, `smoke_fire_type_mapping`, `object_in_zone_object_type`, `zone_exit_notifications_object_type`. Paste sections 4.1, 4.2, 4.6, 4.7, 4.9, 4.10, 4.12 as context.
-
-### Subtask 4 — Complex Core Migrators
-`stream_groups` (dual-write), `analytics`, `users`, `audit_trail`. Paste sections 4.3, 4.4, 4.5, 4.8.
-
-### Subtask 5 — ALPR Migrators
-`alpr_lists`, `alpr_detections`, `alpr_list_events`, `alpr_hourly_statistics`, `alpr_speed_rules`, `alpr_speed_rule_events`. Paste sections 4.11-4.17.
-
-### Subtask 6 — Notification & Stats Migrators
-`traffic_stat`, `stats_traffic` (merge), `gender_age_stat`, `gun_notifications`, `hardhats_notifications`, `smoke_fire_notifications`, `object_in_zone_notifications`, `zone_exit_notifications`, `railroad_numbers`. Paste sections 4.18-4.26.
-
-### Subtask 7 — Port Logistics
-`port_logistics_container_numbers`, `port_logistics_detections`, `port_logistics_rules`. Paste sections 4.27-4.29.
-
-### Subtask 8 — Face Lists DB Migration
-`face_lists`, `face_list_items`. Paste section 4.30.
-
-### Subtask 9 — Face Image Organizer
-`FaceImageOrganizer` with all steps. Paste section 5. All edge case tests.
-
-### Subtask 10 — SQL File Reader + Wiring + README
-`SqlFileReader` (parse MySQL dump INSERTs). Wire `MigratorApplication`. Write README per section 10. Final coverage check.
+Subtask 1: ConfigModel, AppConfig, DataSourceFactory, IdToUuidResolver, StreamToAnalyticsResolver, BatchInserter, MigrationOrchestrator (shell + sequence reset logic) + all corresponding tests.
+Subtask 2: All simple direct migrators: clients, streams, roles, servers, event_manager, settings, alpr_list_items, gun_type_mapping, smoke_fire_type_mapping, object_in_zone_object_type, zone_exit_notifications_object_type + all corresponding tests.
+Subtask 3: stream_groups (dual-write to both stream_groups and analytics_groups), analytics, users, audit_trail + all corresponding tests.
+Subtask 4: All ALPR migrators: alpr_lists, alpr_detections, alpr_list_events, alpr_hourly_statistics, alpr_speed_rules, alpr_speed_rule_events + all corresponding tests.
+Subtask 5: All remaining migrators: traffic_stat, stats_traffic (merge of two old tables), gender_age_stat, all notification migrators (gun_notifications, hardhats_notifications, smoke_fire_notifications, object_in_zone_notifications, zone_exit_notifications), railroad_numbers, all port logistics migrators (port_logistics_container_numbers, port_logistics_detections, port_logistics_rules) + all corresponding tests.
+Subtask 6: face_lists, face_list_items, FaceImageOrganizer, SqlFileReader, wiring in MigratorApplication, README + all corresponding tests.
 
 **General tips:**
 - Maintain a `CLAUDE.md` in the repo root with: package structure, resolver API signatures, key config model fields. Claude Code reads this automatically without consuming prompt tokens.
