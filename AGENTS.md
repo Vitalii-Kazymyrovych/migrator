@@ -2,7 +2,7 @@
 
 ## Project
 Java 17 / Spring Boot CLI application for VideoAnalytics database migration (old MySQL schema → new PostgreSQL schema).
-Build: ./mvnw -B test (run after every code change)
+Build: ./mvnw -B test (run after finishing every task)
 
 ## Rules
 - Full spec: until/spec.md — read ONLY the sections relevant to the current task
