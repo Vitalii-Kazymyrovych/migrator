@@ -24,6 +24,11 @@ public class StatsTrafficMigrator extends BaseMigratorSupport implements TableMi
     }
 
     @Override
+    public String getTargetTable() {
+        return "stats_traffic_minutely";
+    }
+
+    @Override
     public void migrate() {
         List<Map<String, Object>> hourlyRows = sourceJdbcTemplate.queryForList("SELECT * FROM stats_traffic_hourly");
         List<Map<String, Object>> minutelyRows = sourceJdbcTemplate.queryForList("SELECT * FROM stats_traffic_minutely");

@@ -1,8 +1,10 @@
 package com.vezha.migrator.migration;
 
 import com.vezha.migrator.config.ConfigModel;
+import com.vezha.migrator.migration.impl.StreamGroupsMigrator;
 import com.vezha.migrator.util.IdToUuidResolver;
 import com.vezha.migrator.util.StreamToAnalyticsResolver;
+import com.vezha.migrator.util.TargetSchemaInspector;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -27,9 +29,11 @@ class MigrationOrchestratorTest {
 
         IdToUuidResolver idResolver = mock(IdToUuidResolver.class);
         StreamToAnalyticsResolver analyticsResolver = mock(StreamToAnalyticsResolver.class);
+        TargetSchemaInspector targetSchemaInspector = mock(TargetSchemaInspector.class);
+        when(targetSchemaInspector.tableExists(anyString())).thenReturn(true);
 
         TableMigrator clientsMigrator = migrator("clients");
-        TableMigrator settingsMigrator = migrator("settings");
+        TableMigrator settingsMigrator = migrator("settings", "system_settings");
         TableMigrator eventManagerMigrator = migrator("event_manager");
 
         MigrationOrchestrator orchestrator = new MigrationOrchestrator(
@@ -37,6 +41,7 @@ class MigrationOrchestratorTest {
                 destinationJdbc,
                 idResolver,
                 analyticsResolver,
+                targetSchemaInspector,
                 List.of(clientsMigrator, settingsMigrator, eventManagerMigrator)
         );
 
@@ -45,6 +50,7 @@ class MigrationOrchestratorTest {
 
         verify(idResolver, times(1)).load(sourceJdbc);
         verify(analyticsResolver, times(1)).load(sourceJdbc);
+        verify(targetSchemaInspector, times(1)).load(config);
 
         verify(clientsMigrator, times(1)).migrate();
         verify(settingsMigrator, times(1)).migrate();
@@ -56,16 +62,73 @@ class MigrationOrchestratorTest {
     }
 
     @Test
-    void resetsMysqlAutoIncrementForEligibleTables() {
+    void skipsMigratorWhenTargetTableIsMissing() {
         JdbcTemplate sourceJdbc = mock(JdbcTemplate.class);
         JdbcTemplate destinationJdbc = mock(JdbcTemplate.class);
-        when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(7L);
+        when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+
+        TargetSchemaInspector targetSchemaInspector = mock(TargetSchemaInspector.class);
+        when(targetSchemaInspector.tableExists("clients")).thenReturn(false);
+        when(targetSchemaInspector.tableExists("alpr_stats_hourly")).thenReturn(true);
+
+        TableMigrator clientsMigrator = migrator("clients");
 
         MigrationOrchestrator orchestrator = new MigrationOrchestrator(
                 sourceJdbc,
                 destinationJdbc,
                 mock(IdToUuidResolver.class),
                 mock(StreamToAnalyticsResolver.class),
+                targetSchemaInspector,
+                List.of(clientsMigrator)
+        );
+
+        orchestrator.run(postgresConfigOnlyClients());
+
+        verify(clientsMigrator, never()).migrate();
+    }
+
+    @Test
+    void streamGroupsSkipsAnalyticsGroupsWriteButStillMigratesWhenOnlyAnalyticsGroupsMissing() {
+        JdbcTemplate sourceJdbc = mock(JdbcTemplate.class);
+        JdbcTemplate destinationJdbc = mock(JdbcTemplate.class);
+        when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(10L);
+
+        TargetSchemaInspector targetSchemaInspector = mock(TargetSchemaInspector.class);
+        when(targetSchemaInspector.tableExists("stream_groups")).thenReturn(true);
+        when(targetSchemaInspector.tableExists("analytics_groups")).thenReturn(false);
+
+        StreamGroupsMigrator streamGroupsMigrator = mock(StreamGroupsMigrator.class);
+        when(streamGroupsMigrator.tableName()).thenReturn("stream_groups");
+
+        MigrationOrchestrator orchestrator = new MigrationOrchestrator(
+                sourceJdbc,
+                destinationJdbc,
+                mock(IdToUuidResolver.class),
+                mock(StreamToAnalyticsResolver.class),
+                targetSchemaInspector,
+                List.of(streamGroupsMigrator)
+        );
+
+        orchestrator.run(postgresConfigOnlyStreamGroups());
+
+        verify(streamGroupsMigrator, times(1)).setMigrateAnalyticsGroups(false);
+        verify(streamGroupsMigrator, times(1)).migrate();
+    }
+
+    @Test
+    void resetsMysqlAutoIncrementForEligibleTables() {
+        JdbcTemplate sourceJdbc = mock(JdbcTemplate.class);
+        JdbcTemplate destinationJdbc = mock(JdbcTemplate.class);
+        when(destinationJdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(7L);
+
+        TargetSchemaInspector targetSchemaInspector = mock(TargetSchemaInspector.class);
+
+        MigrationOrchestrator orchestrator = new MigrationOrchestrator(
+                sourceJdbc,
+                destinationJdbc,
+                mock(IdToUuidResolver.class),
+                mock(StreamToAnalyticsResolver.class),
+                targetSchemaInspector,
                 List.of()
         );
 
@@ -79,8 +142,13 @@ class MigrationOrchestratorTest {
     }
 
     private TableMigrator migrator(String name) {
+        return migrator(name, name);
+    }
+
+    private TableMigrator migrator(String name, String targetTable) {
         TableMigrator migrator = mock(TableMigrator.class);
         when(migrator.tableName()).thenReturn(name);
+        when(migrator.getTargetTable()).thenReturn(targetTable);
         return migrator;
     }
 
@@ -110,6 +178,34 @@ class MigrationOrchestratorTest {
         return model;
     }
 
+    private ConfigModel postgresConfigOnlyClients() {
+        ConfigModel model = new ConfigModel();
+        model.setMigration(new ConfigModel.MigrationConfig());
+        model.getMigration().setTables(new LinkedHashMap<>());
+
+        ConfigModel.TableConfig clients = new ConfigModel.TableConfig();
+        clients.setEnabled(true);
+        model.getMigration().getTables().put("clients", clients);
+
+        model.getDestination().getPostgres().setEnabled(true);
+        model.getDestination().getPostgres().setSchema("videoanalytics");
+        return model;
+    }
+
+    private ConfigModel postgresConfigOnlyStreamGroups() {
+        ConfigModel model = new ConfigModel();
+        model.setMigration(new ConfigModel.MigrationConfig());
+        model.getMigration().setTables(new LinkedHashMap<>());
+
+        ConfigModel.TableConfig streamGroups = new ConfigModel.TableConfig();
+        streamGroups.setEnabled(true);
+        model.getMigration().getTables().put("stream_groups", streamGroups);
+
+        model.getDestination().getPostgres().setEnabled(true);
+        model.getDestination().getPostgres().setSchema("videoanalytics");
+        return model;
+    }
+
     private ConfigModel mysqlDestinationConfig() {
         ConfigModel model = new ConfigModel();
         model.setMigration(new ConfigModel.MigrationConfig());
@@ -132,6 +228,7 @@ class MigrationOrchestratorTest {
         model.getMigration().getTables().put("stats_traffic", statsTraffic);
 
         model.getDestination().getMysql().setEnabled(true);
+        model.getDestination().getMysql().setDatabase("videoanalytics");
         return model;
     }
 }

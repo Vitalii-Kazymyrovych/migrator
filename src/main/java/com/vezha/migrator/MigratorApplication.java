@@ -44,6 +44,7 @@ import com.vezha.migrator.reader.SourceReader;
 import com.vezha.migrator.reader.SqlFileReader;
 import com.vezha.migrator.util.IdToUuidResolver;
 import com.vezha.migrator.util.StreamToAnalyticsResolver;
+import com.vezha.migrator.util.TargetSchemaInspector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -114,6 +115,7 @@ public class MigratorApplication {
                 destinationJdbcTemplate,
                 idToUuidResolver,
                 streamToAnalyticsResolver,
+                new TargetSchemaInspector(destinationJdbcTemplate),
                 migrators
         );
         orchestrator.run(configModel);

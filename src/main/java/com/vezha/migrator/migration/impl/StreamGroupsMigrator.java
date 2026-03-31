@@ -8,6 +8,8 @@ import java.util.Map;
 
 public class StreamGroupsMigrator extends BaseMigratorSupport implements TableMigrator {
 
+    private boolean migrateAnalyticsGroups = true;
+
     public StreamGroupsMigrator(JdbcTemplate sourceJdbcTemplate, JdbcTemplate destinationJdbcTemplate) {
         super(sourceJdbcTemplate, destinationJdbcTemplate);
     }
@@ -15,6 +17,15 @@ public class StreamGroupsMigrator extends BaseMigratorSupport implements TableMi
     @Override
     public String tableName() {
         return "stream_groups";
+    }
+
+    @Override
+    public String getTargetTable() {
+        return "stream_groups";
+    }
+
+    public void setMigrateAnalyticsGroups(boolean migrateAnalyticsGroups) {
+        this.migrateAnalyticsGroups = migrateAnalyticsGroups;
     }
 
     @Override
@@ -33,11 +44,13 @@ public class StreamGroupsMigrator extends BaseMigratorSupport implements TableMi
                 (ps, row) -> setValues(ps, row.get("id"), row.get("parent_id"), row.get("name"), row.get("client_id"))
         );
 
-        destinationJdbcTemplate.batchUpdate(
-                "INSERT INTO analytics_groups (id, parent_id, name, client_id, plugin_name) OVERRIDING SYSTEM VALUE VALUES (?, ?, ?, ?, ?)",
-                rows,
-                500,
-                (ps, row) -> setValues(ps, row.get("id"), row.get("parent_id"), row.get("name"), row.get("client_id"), "")
-        );
+        if (migrateAnalyticsGroups) {
+            destinationJdbcTemplate.batchUpdate(
+                    "INSERT INTO analytics_groups (id, parent_id, name, client_id, plugin_name) OVERRIDING SYSTEM VALUE VALUES (?, ?, ?, ?, ?)",
+                    rows,
+                    500,
+                    (ps, row) -> setValues(ps, row.get("id"), row.get("parent_id"), row.get("name"), row.get("client_id"), "")
+            );
+        }
     }
 }
