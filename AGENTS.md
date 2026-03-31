@@ -2,12 +2,11 @@
 
 ## Project
 Java 17 / Spring Boot CLI application for VideoAnalytics database migration (old MySQL schema → new PostgreSQL schema).
-Build: After writing all files run: ./mvnw -B compile test-compile (run after finishing task)
+Build: ./mvnw -B test (run after every code change)
 
 ## Rules
 - Full spec: until/spec.md — read ONLY the sections relevant to the current task
 - Don't modify: spec.md, README.md without direct request
-- Don't do: git add, git commit, git push — I handle git myself
 - Tests must not call external services or real databases
 - config.json is gitignored, never commit it
 
@@ -15,17 +14,7 @@ Build: After writing all files run: ./mvnw -B compile test-compile (run after fi
 - Use Mockito for DB interactions
 - Use in-memory H2 for integration-level migrator tests
 - No Docker, no Testcontainers
-
-## File editing
-- NEVER use string replacement on multi-line blocks (PowerShell Replace, python str.replace, sed multi-line)
-- For changes spanning more than 3 lines: rewrite the ENTIRE method or ENTIRE file
-- If an edit fails on first attempt: rewrite the whole file, don't debug whitespace
-- Maximum 2 attempts for any single file edit. If both fail — rewrite the file from scratch.
-- NEVER write PowerShell scripts. Use only: Read/Write tool, or bash -c with simple commands.
-- NEVER use bash/python/powershell to read or edit Java files. Use ONLY built-in Read/Write/Update tools.
-
-## Anti-loop rule
-- If the same operation (edit, search, build) fails twice with similar errors: STOP and explain the problem to me. Do NOT retry more than twice.
+- If tests fail: review exception → fix code → run tests → repeat
 
 ## Package structure
 com.vezha.migrator
@@ -72,7 +61,7 @@ except the three tables above. See spec.md §7.1.
 ## Token discipline
 - Write each file completely in one operation, never partially
 - Do not re-read a file you wrote in the same session
-- Run ./mvnw -B compile test-compile only once after all files in the current task are written
+- Run ./mvnw -B test only once after all files in the current task are written
 - Do not explore project structure — it is fully described in this file
 
 ## How to read the spec
