@@ -58,6 +58,8 @@ db-migrator/
 │   │   └── util/
 │   │       ├── IdToUuidResolver.java
 │   │       ├── StreamToAnalyticsResolver.java  # stream_id -> analytics_id(s)
+│   │       ├── SourceSchemaInspector.java
+│   │       ├── TargetSchemaInspector.java
 │   │       └── BatchInserter.java
 │   └── test/...
 ├── config.json
@@ -186,9 +188,76 @@ Placed in the same directory as the `.jar` at runtime. All blocks are always pre
 
 ---
 
-## 3. Pre-Migration Resolver Setup
+## 3. Pre-Migration Setup
 
-Before any migrator runs, two resolvers are loaded into memory from the source DB:
+The following steps run in order before any migrator executes:
+
+1. `SourceSchemaInspector` — queries source DB for existing table names (see 3.1)
+2. `TargetSchemaInspector` — queries destination DB for existing table names (see 3.2)
+3. `IdToUuidResolver` — loads stream id→uuid map (see 3.3)
+4. `StreamToAnalyticsResolver` — loads stream→analytics map (see 3.3)
+
+---
+
+## 3.1 Source Schema Inspection
+
+`SourceSchemaInspector` queries the source DB on startup and stores all existing table names as `Set<String>` (lowercase).
+
+**Query per source type:**
+
+- MySQL: `SELECT table_name FROM information_schema.tables WHERE table_schema = '<database>'`
+- PostgreSQL: `SELECT table_name FROM information_schema.tables WHERE table_schema = '<schema>'`
+- MSSQL: `SELECT table_name FROM information_schema.tables WHERE table_catalog = '<database>'`
+- Oracle: `SELECT LOWER(table_name) FROM user_tables`
+- H2: `SELECT LOWER(table_name) FROM information_schema.tables WHERE table_schema = 'PUBLIC'`
+- SQL file: parse `CREATE TABLE \`?(\w+)\`?` statements from the dump file
+
+**Method:** `boolean tableExists(String tableName)`
+
+**Integration in `MigrationOrchestrator`:**
+
+Each `TableMigrator` implementation declares its source tables via:
+```java
+List<String> getSourceTables();
+```
+
+Before calling any migrator, the orchestrator checks all declared source tables. Rules:
+
+- If any primary source table is missing -> log INFO `"Skipping <MigratorName>: source table <tableName> not found in source DB"` and skip the migrator entirely.
+- **`AlprListEventsMigrator`** special case: primary source is `alpr_notifications`; `alpr_plates` is a secondary JOIN table. If `alpr_notifications` is missing -> skip. If `alpr_plates` is missing -> log WARN and run anyway (JOIN will produce no results but migration proceeds without crashing).
+- **`StatsTrafficMigrator`** special case: source tables are `stats_traffic_hourly` AND `stats_traffic_minutely`. If both missing -> skip. If only one is missing -> log INFO about the missing one and migrate only from the present one.
+
+---
+
+## 3.2 Target Schema Inspection
+
+`TargetSchemaInspector` queries the destination DB on startup and stores all existing table names as `Set<String>` (lowercase).
+
+**Query per destination type:**
+
+- PostgreSQL: `SELECT table_name FROM information_schema.tables WHERE table_schema = '<schema>'`
+- MySQL: `SELECT table_name FROM information_schema.tables WHERE table_schema = '<database>'`
+
+**Method:** `boolean tableExists(String tableName)`
+
+**Integration in `MigrationOrchestrator`:**
+
+Each `TableMigrator` implementation declares its target table via:
+```java
+String getTargetTable();
+```
+
+Before calling any migrator, the orchestrator checks the target table. If it does not exist -> log INFO `"Skipping <MigratorName>: table <tableName> not found in target DB"` and skip.
+
+**`StreamGroupsMigrator` special case** (dual-write):
+- If `stream_groups` is missing in target -> skip entirely.
+- If `analytics_groups` is missing in target -> still migrate `stream_groups`; skip only the `analytics_groups` insert. Log INFO.
+
+**Sequence reset** (section 7.1): only reset sequences for tables that were actually migrated (i.e. both source and target existed and migrator was not skipped).
+
+---
+
+## 3.3 Resolvers
 
 ### `IdToUuidResolver`
 ```
@@ -197,7 +266,6 @@ Map<Integer, UUID> streamIdToUuid = SELECT id, uuid FROM streams
 Used to resolve old integer stream IDs to UUIDs wherever `stream_uuid` is referenced in the new schema.
 
 ### `StreamToAnalyticsResolver`
-The resolver builds:
 ```
 Map<Integer, List<AnalyticsEntry>> streamIdToAnalytics =
     SELECT stream_id, id, plugin_name FROM analytics
@@ -207,7 +275,7 @@ Map<Integer, List<AnalyticsEntry>> streamIdToAnalytics =
 
 Methods:
 - `getFirstByPlugin(streamId, pluginName)` — filters candidates by `plugin_name`, returns the lowest matching `analytics_id` as `Optional<Integer>`. If no match -> log WARN with `stream_id` and `plugin_name`, return empty Optional.
-- `getAll(streamId)` — returns all analytics IDs for a stream regardless of plugin, as `List<Integer>`. Used by `alpr_lists` and `face_lists` when resolving `streams -> analytics_ids` (where all analytics on a stream should be included).
+- `getAll(streamId)` — returns all analytics IDs for a stream regardless of plugin, as `List<Integer>`. Used by `alpr_lists` and `face_lists` when resolving `streams -> analytics_ids`.
 
 ---
 
@@ -715,11 +783,15 @@ For each `item_id` that was successfully renamed:
 ## 6. Migration Execution Order
 
 ```
+ 0.  SourceSchemaInspector loads   <- before everything
+ 0.  TargetSchemaInspector loads   <- before everything
+ 0.  IdToUuidResolver loads        <- before everything
+ 0.  StreamToAnalyticsResolver loads <- before everything
  1.  clients
  2.  servers
  3.  roles
  4.  streams
- 5.  stream_groups          <- also writes analytics_groups
+ 5.  stream_groups          <- also writes analytics_groups if target table exists
  6.  analytics
  7.  users
  8.  audit_trail
@@ -751,8 +823,10 @@ For each `item_id` that was successfully renamed:
 34.  face_lists             <- conditional
 35.  face_list_items        <- conditional (DB only)
 36.  Face image processing  <- conditional
-37.  Sequence reset         <- always, see 7.1
+37.  Sequence reset         <- only for tables that were actually migrated, see 7.1
 ```
+
+Each step is skipped automatically if the source or target table was not found by the schema inspectors.
 
 ---
 
@@ -760,7 +834,7 @@ For each `item_id` that was successfully renamed:
 
 - JDBC `PreparedStatement` with `addBatch()` / `executeBatch()`. Batch size from config (default 1000).
 - Each migrator in a single transaction; batch failure rolls back whole table, logs ERROR with row range.
-- Resolvers loaded once before any migration runs.
+- Resolvers and inspectors loaded once before any migration runs.
 - Large tables use keyset pagination: `WHERE id > :lastId ORDER BY id LIMIT :batchSize`.
 - `alpr_list_events` paginates by `alpr_notifications.id`.
 
@@ -769,6 +843,8 @@ For each `item_id` that was successfully renamed:
 ## 7.1 Post-Migration Sequence Reset
 
 After all migrators complete, the `MigrationOrchestrator` resets identity sequences for every table where original IDs were preserved, so that the next real insert does not collide.
+
+Only reset sequences for tables that were **actually migrated** (source existed, target existed, migrator was not skipped).
 
 **PostgreSQL destination** — query `MAX(id)` in Java, then call `setval`:
 
@@ -788,7 +864,7 @@ jdbcTemplate.execute(
     "ALTER TABLE " + table + " AUTO_INCREMENT = " + (maxId + 1));
 ```
 
-Apply to every table **except** these three, where IDs were not preserved during migration:
+Apply to every migrated table **except** these three, where IDs were not preserved:
 - `event_manager` — serial `id` was auto-generated; no reset needed.
 - `system_settings` — same.
 - `stats_traffic_minutely` — IDs were not preserved during the merge of two old tables.
@@ -799,6 +875,7 @@ Apply to every table **except** these three, where IDs were not preserved during
 
 - SLF4J + Logback. Log file: `migration.log` in the jar directory.
 - Startup: active source, active destination, enabled tables list.
+- Schema inspection results: list of source tables found, list of target tables found, list of migrators that will be skipped due to missing source or target.
 - Per table: start, rows read, rows inserted, rows skipped/warned, duration.
 - Resolution warnings include table name, row id, field name, unresolved value.
 - Finish: summary of migrated / skipped / failed / empty tables.
@@ -813,10 +890,12 @@ Use Mockito for DB calls; H2 for integration-level tests. No Docker/Testcontaine
 |---|---|
 | `AppConfigTest` | Valid config; no enabled source -> throws; no enabled dest -> throws; two enabled sources -> throws; face_lists enabled without path -> throws; path not existing -> throws. |
 | `DataSourceFactoryTest` | Correct JDBC URL for each DB type. |
+| `SourceSchemaInspectorTest` | tableExists returns true for present table; false for absent; correct SQL per DB type (MySQL, PostgreSQL, MSSQL, Oracle, H2); SQL file source parses CREATE TABLE statements correctly. |
+| `TargetSchemaInspectorTest` | tableExists returns true for present table; false for absent; correct SQL for PostgreSQL and MySQL. |
 | `IdToUuidResolverTest` | Known ID -> correct UUID; unknown ID -> empty Optional. |
 | `StreamToAnalyticsResolverTest` | getAll returns full list for stream; getAll returns empty for unknown stream; getFirstByPlugin returns correct id when multiple plugins on same stream; getFirstByPlugin returns empty when plugin not present on that stream; WARN logged on plugin miss. |
 | `BatchInserterTest` | Flush at batchSize; flush remainder on close; exception -> rollback + rethrow. |
-| `StreamGroupsMigratorTest` | Each source row produces one insert to stream_groups AND one to analytics_groups; plugin_name = ''. |
+| `StreamGroupsMigratorTest` | Each source row produces one insert to stream_groups AND one to analytics_groups; plugin_name = ''; analytics_groups insert skipped when target table absent; stream_groups skipped entirely when stream_groups target absent. |
 | `AnalyticsMigratorTest` | stream_id -> stream_uuid via IdToUuidResolver; NULL stream_id -> NULL + WARN; disable_balancing bit->bool; topic not inserted; uuid generated per row; group_id from streams.parent_id; missing stream -> group_id=0. |
 | `UsersMigratorTest` | role_id=5 -> "[5]"; role_id=0 -> "[]". |
 | `AuditTrailMigratorTest` | event_category int -> UUID deterministic; event_action int -> UUID deterministic; stream_id and analytics_id not inserted; session_id and user_ip copied. |
@@ -824,12 +903,12 @@ Use Mockito for DB calls; H2 for integration-level tests. No Docker/Testcontaine
 | `SettingsMigratorTest` | Variable_name -> variable_name; Value -> value; id not set. |
 | `AlprListsMigratorTest` | streams JSON resolved to analytics_ids via getAll; NULL streams -> NULL; bit->bool; null list_permissions -> ''; show_popup defaulted. |
 | `AlprDetectionsMigratorTest` | stream_id+va_id->analytics_id via getFirstByPlugin("AlprAnalyticsModule"); fallback to va_id on miss+WARN; lat/lng default 0; list_items not inserted. |
-| `AlprListEventsMigratorTest` | JOIN with alpr_plates; plate columns populated; analytics_id resolved via getFirstByPlugin("AlprAnalyticsModule"); fallback to va_id; missing plate -> ERROR+skip; lat/lng NULL. |
+| `AlprListEventsMigratorTest` | JOIN with alpr_plates; plate columns populated; analytics_id resolved via getFirstByPlugin("AlprAnalyticsModule"); fallback to va_id; missing plate -> ERROR+skip; lat/lng NULL; runs with WARN when alpr_plates missing from source. |
 | `AlprHourlyStatsMigratorTest` | stream_id->analytics_id via getFirstByPlugin("AlprAnalyticsModule"); not found->WARN+skip. |
 | `AlprSpeedRulesMigratorTest` | stream_id1/2->analytics_id1/2 via getFirstByPlugin("AlprAnalyticsModule"); not found->WARN+default 0. |
 | `AlprSpeedRuleEventsMigratorTest` | speed_limit->speed_value; detection ids NULL; dropped columns absent; INFO logged once about semantic difference and data loss. |
 | `TrafficStatMigratorTest` | stream_id+va_id both kept; absent columns default 0/NULL. |
-| `StatsTrafficMigratorTest` | Both old tables merged; original IDs NOT preserved (auto-generated); row counts per source logged. |
+| `StatsTrafficMigratorTest` | Both old tables merged; original IDs NOT preserved (auto-generated); row counts per source logged; runs with only one source table present; skipped when both source tables absent. |
 | `GenderAgeStatMigratorTest` | stream_id+va_id both kept; direct copy. |
 | `GunNotificationsMigratorTest` | stream_id dropped; va_id kept; lat/lng NULL. |
 | `HardhatsNotificationsMigratorTest` | Same as gun. |
@@ -843,7 +922,7 @@ Use Mockito for DB calls; H2 for integration-level tests. No Docker/Testcontaine
 | `FaceListsMigratorTest` | streams->analytics_ids via getAll; enabled not inserted; bit->bool; null list_permissions->''; show_popup default. |
 | `FaceListItemsMigratorTest` | All old columns copied; new expiration sub-columns default correctly. |
 | `FaceImageOrganizerTest` | Path strip (face_lists/0/0/x.jpg->x.jpg); first-image-wins; rename to sanitised name; list folder created; moved to correct list; missing file->WARN+skip; target exists->WARN+skip; illegal chars->_; collision within list->append _item_id; person with no image->skip. |
-| `MigrationOrchestratorTest` | Correct execution order; disabled table skipped; per-table exception caught+logged, does not abort others; new-only tables logged INFO; sequence reset called for each applicable table after all migrators complete; event_manager, system_settings, stats_traffic_minutely excluded from sequence reset. |
+| `MigrationOrchestratorTest` | Correct execution order; disabled table skipped; migrator skipped when source table absent; migrator skipped when target table absent; StatsTrafficMigrator runs with one source table; StreamGroupsMigrator skips analytics_groups write when only that target is absent; per-table exception caught+logged, does not abort others; sequence reset called only for actually migrated tables; event_manager, system_settings, stats_traffic_minutely excluded from sequence reset. |
 
 ---
 
@@ -921,10 +1000,10 @@ WHERE TABLE_SCHEMA = 'PUBLIC';
 ```
 
 5. **Data loss section** — explicitly documents:
-    - `alpr_speed_rule_events`: plate/frame/timestamp detail lost; `speed_value` contains old rule threshold, not measured speed.
-    - `traffic_lights_detections`: skipped entirely (no target table).
-    - `port_logistics_rule_groups`, `api_tokens`, `cleaning_settings`, `sounds_settings`, `plugin_configurations`: empty after migration.
-    - `analytics_groups.plugin_name` will be blank for all migrated rows.
+   - `alpr_speed_rule_events`: plate/frame/timestamp detail lost; `speed_value` contains old rule threshold, not measured speed.
+   - `traffic_lights_detections`: skipped entirely (no target table).
+   - `port_logistics_rule_groups`, `api_tokens`, `cleaning_settings`, `sounds_settings`, `plugin_configurations`: empty after migration.
+   - `analytics_groups.plugin_name` will be blank for all migrated rows.
 6. Face image migration guide with before/after folder structure example.
 7. Troubleshooting section.
 
@@ -949,12 +1028,12 @@ org.mockito:mockito-core
 
 ## 12. Token-Saving Subtask Breakdown for AI Agent
 
-Subtask 1: ConfigModel, AppConfig, DataSourceFactory, IdToUuidResolver, StreamToAnalyticsResolver, BatchInserter, MigrationOrchestrator (shell + sequence reset logic) + all corresponding tests.
-Subtask 2: All simple direct migrators: clients, streams, roles, servers, event_manager, settings, alpr_list_items, gun_type_mapping, smoke_fire_type_mapping, object_in_zone_object_type, zone_exit_notifications_object_type + all corresponding tests.
-Subtask 3: stream_groups (dual-write to both stream_groups and analytics_groups), analytics, users, audit_trail + all corresponding tests.
-Subtask 4: All ALPR migrators: alpr_lists, alpr_detections, alpr_list_events, alpr_hourly_statistics, alpr_speed_rules, alpr_speed_rule_events + all corresponding tests.
-Subtask 5: All remaining migrators: traffic_stat, stats_traffic (merge of two old tables), gender_age_stat, all notification migrators (gun_notifications, hardhats_notifications, smoke_fire_notifications, object_in_zone_notifications, zone_exit_notifications), railroad_numbers, all port logistics migrators (port_logistics_container_numbers, port_logistics_detections, port_logistics_rules) + all corresponding tests.
-Subtask 6: face_lists, face_list_items, FaceImageOrganizer, SqlFileReader, wiring in MigratorApplication, README + all corresponding tests.
+**Subtask 1:** `ConfigModel`, `AppConfig`, `DataSourceFactory`, `IdToUuidResolver`, `StreamToAnalyticsResolver`, `SourceSchemaInspector`, `TargetSchemaInspector`, `BatchInserter`, `MigrationOrchestrator` (shell + sequence reset logic) + all corresponding tests.
+**Subtask 2:** All simple direct migrators: `clients`, `streams`, `roles`, `servers`, `event_manager`, `settings`, `alpr_list_items`, `gun_type_mapping`, `smoke_fire_type_mapping`, `object_in_zone_object_type`, `zone_exit_notifications_object_type` + all corresponding tests.
+**Subtask 3:** `stream_groups` (dual-write to both `stream_groups` and `analytics_groups`), `analytics`, `users`, `audit_trail` + all corresponding tests.
+**Subtask 4:** All ALPR migrators: `alpr_lists`, `alpr_detections`, `alpr_list_events`, `alpr_hourly_statistics`, `alpr_speed_rules`, `alpr_speed_rule_events` + all corresponding tests.
+**Subtask 5:** All remaining migrators: `traffic_stat`, `stats_traffic` (merge of two old tables), `gender_age_stat`, all notification migrators (`gun_notifications`, `hardhats_notifications`, `smoke_fire_notifications`, `object_in_zone_notifications`, `zone_exit_notifications`), `railroad_numbers`, all port logistics migrators (`port_logistics_container_numbers`, `port_logistics_detections`, `port_logistics_rules`) + all corresponding tests.
+**Subtask 6:** `face_lists`, `face_list_items`, `FaceImageOrganizer`, `SqlFileReader`, wiring in `MigratorApplication`, README + all corresponding tests.
 
 **General tips:**
 - Maintain a `AGENTS.md` in the repo root with: package structure, resolver API signatures, key config model fields. AI Agent reads this automatically without consuming prompt tokens.
@@ -962,3 +1041,4 @@ Subtask 6: face_lists, face_list_items, FaceImageOrganizer, SqlFileReader, wirin
 - Never implement more than 5-6 migrators per session.
 - For tests always specify: "Use Mockito for DB. Use H2 for integration. No Docker."
 - After each subtask, commit and summarise new classes added to paste into the next session's context.
+- 
