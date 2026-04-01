@@ -1,5 +1,6 @@
 package com.vezha.migrator.migration.impl;
 
+import com.vezha.migrator.util.StreamToAnalyticsGroupResolver;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.sql.PreparedStatement;
@@ -14,10 +15,16 @@ abstract class BaseMigratorSupport {
 
     protected final JdbcTemplate sourceJdbcTemplate;
     protected final JdbcTemplate destinationJdbcTemplate;
+    protected final StreamToAnalyticsGroupResolver streamToAnalyticsGroupResolver;
 
-    protected BaseMigratorSupport(JdbcTemplate sourceJdbcTemplate, JdbcTemplate destinationJdbcTemplate) {
+    protected BaseMigratorSupport(JdbcTemplate sourceJdbcTemplate, JdbcTemplate destinationJdbcTemplate, StreamToAnalyticsGroupResolver streamToAnalyticsGroupResolver) {
         this.sourceJdbcTemplate = sourceJdbcTemplate;
         this.destinationJdbcTemplate = destinationJdbcTemplate;
+        this.streamToAnalyticsGroupResolver = streamToAnalyticsGroupResolver;
+    }
+
+    protected BaseMigratorSupport(JdbcTemplate sourceJdbcTemplate, JdbcTemplate destinationJdbcTemplate) {
+        this(sourceJdbcTemplate, destinationJdbcTemplate, null);
     }
 
     protected interface RowCustomizer {

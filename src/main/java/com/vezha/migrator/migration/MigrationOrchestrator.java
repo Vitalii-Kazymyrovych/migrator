@@ -87,10 +87,10 @@ public class MigrationOrchestrator {
 
         String targetTable = migrator.getTargetTable();
         if (!targetSchemaInspector.tableExists(targetTable)) {
+            System.out.println("SKIP target: " + migrator.getClass().getSimpleName() + " table: " + targetTable);
             log.info("Skipping {}: table {} not found in target DB", migrator.getClass().getSimpleName(), targetTable);
             return;
         }
-
         migrator.migrate();
     }
 
@@ -127,6 +127,7 @@ public class MigrationOrchestrator {
 
         for (String sourceTable : migrator.getSourceTables()) {
             if (!sourceSchemaInspector.tableExists(sourceTable)) {
+                System.out.println("SKIP source: " + migrator.getClass().getSimpleName() + " table: " + sourceTable);
                 log.info("Skipping {}: source table {} not found in source DB", migrator.getClass().getSimpleName(), sourceTable);
                 return false;
             }
@@ -149,6 +150,7 @@ public class MigrationOrchestrator {
                     .distinct()
                     .filter(table -> !EXCLUDED_SEQUENCE_RESET_TABLES.contains(table))
                     .forEach(table -> resetPostgresSequence(schema, table));
+            resetPostgresSequence(schema, "analytics_groups");
             return;
         }
 

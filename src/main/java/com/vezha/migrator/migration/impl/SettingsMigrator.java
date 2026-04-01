@@ -24,7 +24,7 @@ public class SettingsMigrator extends BaseMigratorSupport implements TableMigrat
 
     @Override
     public void migrate() {
-        List<Map<String, Object>> rows = sourceJdbcTemplate.queryForList("SELECT Variable_name, Value FROM settings");
+        List<Map<String, Object>> rows = sourceJdbcTemplate.queryForList("SELECT Variable_name, \"Value\" FROM settings");
         if (rows.isEmpty()) {
             return;
         }

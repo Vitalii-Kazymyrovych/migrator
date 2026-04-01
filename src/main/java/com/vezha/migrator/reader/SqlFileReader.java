@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class SqlFileReader implements SourceReader {
     private static final Logger log = LoggerFactory.getLogger(SqlFileReader.class);
@@ -22,7 +23,7 @@ public class SqlFileReader implements SourceReader {
     @Override
     public JdbcTemplate read(ConfigModel configModel) {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setUrl("jdbc:h2:mem:migrator-source;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
+        dataSource.setUrl("jdbc:h2:mem:migrator-source;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1");
         dataSource.setUsername("sa");
         dataSource.setPassword("");
 
@@ -48,11 +49,16 @@ public class SqlFileReader implements SourceReader {
         try {
             String content = Files.readString(Path.of(path));
             for (String statement : splitStatements(content)) {
-                try {
-                    jdbcTemplate.execute(normalizeForH2(statement));
-                } catch (DataAccessException ex) {
-                    String rootCause = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
-                    log.warn("Skipping SQL statement from {} due to parser incompatibility: {} | rootCause={}", path, ex.getMessage(), rootCause);
+                if (isCopyStatement(statement)) continue;
+                for (String expanded : expandMultiRowInserts(statement)) {
+                    try {
+                        String normalized = normalizeForH2(expanded);
+                        jdbcTemplate.execute(normalized);
+                        log.debug("OK: {}", normalized.substring(0, Math.min(80, normalized.length())));
+                    } catch (DataAccessException ex) {
+                        String rootCause = ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage();
+                        log.warn("Skipping SQL statement from {} due to parser incompatibility: {} | rootCause={}", path, ex.getMessage(), rootCause);
+                    }
                 }
             }
         } catch (IOException e) {
@@ -60,17 +66,28 @@ public class SqlFileReader implements SourceReader {
         }
     }
 
+    private boolean isCopyStatement(String statement) {
+        return statement.trim().toUpperCase().startsWith("COPY ");
+    }
+
     private String normalizeForH2(String statement) {
         return statement
+                .replaceAll("(?i)\\bvideoanalytics\\.", "")
+                .replaceAll("(?i)\\bCREATE TABLE\\b(?!\\s+IF\\s+NOT\\s+EXISTS)", "CREATE TABLE IF NOT EXISTS")
+                .replaceAll("(?i)^\\s*SET\\s+search_path\\s*=.*$", "")
                 .replace("\\'", "''")
-                .replace("`", "")
+                .replace("`", "\"")
+                // екранувати Value тільки якщо воно ще не в лапках
+                .replaceAll("(?i)(?<!\")\\bValue\\b(?!\")", "\"Value\"")
                 .replaceAll("(?i)\\s+CHARACTER\\s+SET\\s+\\w+", "")
                 .replaceAll("(?i)\\s+COLLATE\\s+\\w+", "")
                 .replaceAll("(?i)b'([01])'", "$1")
                 .replaceAll("(?im)^\\s*(UNIQUE\\s+)?KEY\\s+[^\\n]*\\n", "")
                 .replaceAll("(?im)^\\s*CONSTRAINT\\s+[^\\n]*FOREIGN\\s+KEY[^\\n]*\\n", "")
                 .replaceAll(",\\s*\\)", ")")
-                .replaceAll("(?i)\\)\\s*ENGINE\\s*=\\s*\\w+.*$", ")");
+                .replaceAll("(?i)\\)\\s*ENGINE\\s*=\\s*\\w+.*$", ")")
+                .replaceAll("(?im)^\\s*SET\\s+\\w+\\s*=.*$", "")
+                .replaceAll("(?i)\\bCACHE\\s+\\d+", "");
     }
 
     private List<String> splitStatements(String content) {
@@ -129,5 +146,45 @@ public class SqlFileReader implements SourceReader {
             out.append(line).append(System.lineSeparator());
         }
         return out.toString();
+    }
+
+    private List<String> expandMultiRowInserts(String statement) {
+        // якщо це не INSERT з кількома VALUES-блоками — повертаємо як є
+        if (!statement.trim().toUpperCase().startsWith("INSERT")) {
+            return List.of(statement);
+        }
+        // шукаємо патерн: INSERT INTO t (cols) VALUES (...), (...), (...)
+        int valuesIdx = statement.toUpperCase().indexOf("VALUES");
+        if (valuesIdx == -1) return List.of(statement);
+
+        String prefix = statement.substring(0, valuesIdx + "VALUES".length());
+        String valuesPart = statement.substring(valuesIdx + "VALUES".length()).trim();
+
+        List<String> rows = splitValueRows(valuesPart);
+        if (rows.size() <= 1) return List.of(statement);
+
+        return rows.stream()
+                .map(row -> prefix + " " + row)
+                .collect(Collectors.toList());
+    }
+
+    private List<String> splitValueRows(String valuesPart) {
+        List<String> rows = new ArrayList<>();
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < valuesPart.length(); i++) {
+            char c = valuesPart.charAt(i);
+            if (c == '(') {
+                if (depth == 0) start = i;
+                depth++;
+            } else if (c == ')') {
+                depth--;
+                if (depth == 0) {
+                    rows.add(valuesPart.substring(start, i + 1));
+                }
+            }
+        }
+        return rows;
     }
 }

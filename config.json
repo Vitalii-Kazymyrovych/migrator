@@ -1,0 +1,102 @@
+{
+  "source": {
+    "sqlFile": {
+      "enabled": true,
+      "path": ""
+    },
+    "mysql": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 3306,
+      "database": "videoanalytics",
+      "username": "root",
+      "password": "secret"
+    },
+    "postgres": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 5432,
+      "database": "videoanalytics",
+      "schema": "videoanalytics",
+      "username": "postgres",
+      "password": "secret"
+    },
+    "mssql": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 1433,
+      "database": "videoanalytics",
+      "username": "sa",
+      "password": "secret"
+    },
+    "oracle": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 1521,
+      "serviceName": "xe",
+      "username": "system",
+      "password": "secret"
+    },
+    "h2": {
+      "enabled": false,
+      "url": "jdbc:h2:~/videoanalytics",
+      "username": "sa",
+      "password": ""
+    }
+  },
+  "destination": {
+    "postgres": {
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 5432,
+      "database": "videoanalytics",
+      "schema": "videoanalytics",
+      "username": "postgres",
+      "password": "postgres"
+    },
+    "mysql": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 3306,
+      "database": "videoanalytics_new",
+      "username": "root",
+      "password": "secret"
+    }
+  },
+  "migration": {
+    "batchSize": 1000,
+    "tables": {
+      "clients": {"enabled": true},
+      "roles": {"enabled": true},
+      "streams": {"enabled": true},
+      "stream_groups": {"enabled": true},
+      "analytics": {"enabled": true},
+      "users": {"enabled": true},
+      "event_manager": {"enabled": true},
+      "settings": {"enabled": true},
+      "alpr_lists": {"enabled": true},
+      "alpr_list_items": {"enabled": true},
+      "alpr_detections": {"enabled": true},
+      "alpr_list_events": {"enabled": true},
+      "alpr_hourly_statistics": {"enabled": true},
+      "alpr_speed_rules": {"enabled": true},
+      "alpr_speed_rule_events": {"enabled": true},
+      "traffic_stat": {"enabled": true},
+      "stats_traffic": {"enabled": true},
+      "gender_age_stat": {"enabled": true},
+      "gun_notifications": {"enabled": true},
+      "gun_type_mapping": {"enabled": true},
+      "hardhats_notifications": {"enabled": true},
+      "smoke_fire_notifications": {"enabled": true},
+      "smoke_fire_type_mapping": {"enabled": true},
+      "object_in_zone": {"enabled": true},
+      "object_in_zone_object_type": {"enabled": true},
+      "zone_exit_notifications": {"enabled": true},
+      "zone_exit_notifications_object_type": {"enabled": true},
+      "railroad_numbers": {"enabled": true},
+      "port_logistics": {"enabled": true},
+      "face_lists": {"enabled": false, "imageFolderPath": "/opt/videoanalytics/face-images"},
+      "face_list_items": {"enabled": false}
+    }
+  }
+}

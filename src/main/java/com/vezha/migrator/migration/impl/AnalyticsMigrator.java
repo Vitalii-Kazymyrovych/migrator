@@ -2,6 +2,7 @@ package com.vezha.migrator.migration.impl;
 
 import com.vezha.migrator.migration.TableMigrator;
 import com.vezha.migrator.util.IdToUuidResolver;
+import com.vezha.migrator.util.StreamToAnalyticsGroupResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,8 +20,9 @@ public class AnalyticsMigrator extends BaseMigratorSupport implements TableMigra
 
     public AnalyticsMigrator(JdbcTemplate sourceJdbcTemplate,
                              JdbcTemplate destinationJdbcTemplate,
-                             IdToUuidResolver idToUuidResolver) {
-        super(sourceJdbcTemplate, destinationJdbcTemplate);
+                             IdToUuidResolver idToUuidResolver,
+                             StreamToAnalyticsGroupResolver streamToAnalyticsGroupResolver) {
+        super(sourceJdbcTemplate, destinationJdbcTemplate, streamToAnalyticsGroupResolver);
         this.idToUuidResolver = idToUuidResolver;
     }
 
@@ -94,7 +96,9 @@ public class AnalyticsMigrator extends BaseMigratorSupport implements TableMigra
             }
         }
 
-        Integer groupId = streamId == null ? 0 : streamToGroup.getOrDefault(streamId, 0);
+        Integer streamGroupId = streamId == null ? 0 : streamToGroup.getOrDefault(streamId, 0);
+        String pluginName = (String) sourceRow.get("plugin_name");
+        Integer groupId = streamToAnalyticsGroupResolver.resolve(streamGroupId, pluginName != null ? pluginName : "");
 
         Map<String, Object> transformed = new LinkedHashMap<>();
         transformed.put("id", sourceRow.get("id"));

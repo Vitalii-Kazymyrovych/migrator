@@ -45,7 +45,8 @@ public class DataSourceFactory {
 
     private DataSource buildPostgres(ConfigModel.PostgresConfig config) {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setUrl("jdbc:postgresql://%s:%d/%s".formatted(config.getHost(), config.getPort(), config.getDatabase()));
+        dataSource.setUrl("jdbc:postgresql://%s:%d/%s?currentSchema=%s".formatted(
+                config.getHost(), config.getPort(), config.getDatabase(), config.getSchema()));
         dataSource.setUsername(config.getUsername());
         dataSource.setPassword(config.getPassword());
         return dataSource;

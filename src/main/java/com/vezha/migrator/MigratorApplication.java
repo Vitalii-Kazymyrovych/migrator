@@ -42,10 +42,7 @@ import com.vezha.migrator.migration.impl.ZoneExitNotificationsObjectTypeMigrator
 import com.vezha.migrator.reader.DatabaseReader;
 import com.vezha.migrator.reader.SourceReader;
 import com.vezha.migrator.reader.SqlFileReader;
-import com.vezha.migrator.util.IdToUuidResolver;
-import com.vezha.migrator.util.SourceSchemaInspector;
-import com.vezha.migrator.util.StreamToAnalyticsResolver;
-import com.vezha.migrator.util.TargetSchemaInspector;
+import com.vezha.migrator.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -74,14 +71,15 @@ public class MigratorApplication {
 
         IdToUuidResolver idToUuidResolver = new IdToUuidResolver();
         StreamToAnalyticsResolver streamToAnalyticsResolver = new StreamToAnalyticsResolver();
+        StreamToAnalyticsGroupResolver analyticsGroupResolver = new StreamToAnalyticsGroupResolver();
 
         List<TableMigrator> migrators = List.of(
                 new ClientsMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new ServersMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new RolesMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new StreamsMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
-                new StreamGroupsMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
-                new AnalyticsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, idToUuidResolver),
+                new StreamGroupsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, analyticsGroupResolver),
+                new AnalyticsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, idToUuidResolver, analyticsGroupResolver),
                 new UsersMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new AuditTrailMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new EventManagerMigrator(sourceJdbcTemplate, destinationJdbcTemplate),

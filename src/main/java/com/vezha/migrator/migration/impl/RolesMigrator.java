@@ -20,7 +20,7 @@ public class RolesMigrator extends BaseMigratorSupport implements TableMigrator 
 
     @Override
     public void migrate() {
-        List<Map<String, Object>> rows = sourceJdbcTemplate.queryForList("SELECT id, role_name, permissions, client_id FROM roles");
+        List<Map<String, Object>> rows = sourceJdbcTemplate.queryForList("SELECT id, role_name, permissions, client_id FROM roles WHERE id != 1");
         if (rows.isEmpty()) {
             return;
         }

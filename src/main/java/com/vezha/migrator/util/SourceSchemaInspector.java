@@ -30,7 +30,16 @@ public class SourceSchemaInspector {
 
     public void load(ConfigModel configModel) {
         if (configModel.getSource().getSqlFile().isEnabled()) {
-            tables = parseSqlFileTables(SOURCE_SQL_PATH.toString());
+            // Читаем из H2 который уже загружен из source.sql + oldDDL.md
+            List<String> tableNames = sourceJdbcTemplate.queryForList(
+                    "SELECT table_name FROM information_schema.tables WHERE UPPER(table_schema) = 'PUBLIC'",
+                    String.class
+            );
+            Set<String> loaded = new HashSet<>();
+            for (String tableName : tableNames) {
+                loaded.add(tableName.toLowerCase(Locale.ROOT));
+            }
+            tables = loaded;
             return;
         }
 
