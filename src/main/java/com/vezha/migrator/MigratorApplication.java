@@ -11,10 +11,8 @@ import com.vezha.migrator.migration.impl.AlprHourlyStatsMigrator;
 import com.vezha.migrator.migration.impl.AlprListEventsMigrator;
 import com.vezha.migrator.migration.impl.AlprListItemsMigrator;
 import com.vezha.migrator.migration.impl.AlprListsMigrator;
-import com.vezha.migrator.migration.impl.AlprSpeedRuleEventsMigrator;
 import com.vezha.migrator.migration.impl.AlprSpeedRulesMigrator;
 import com.vezha.migrator.migration.impl.AnalyticsMigrator;
-import com.vezha.migrator.migration.impl.AuditTrailMigrator;
 import com.vezha.migrator.migration.impl.ClientsMigrator;
 import com.vezha.migrator.migration.impl.EventManagerMigrator;
 import com.vezha.migrator.migration.impl.FaceListItemsMigrator;
@@ -81,7 +79,6 @@ public class MigratorApplication {
                 new StreamGroupsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, analyticsGroupResolver),
                 new AnalyticsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, idToUuidResolver, analyticsGroupResolver),
                 new UsersMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
-                new AuditTrailMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new EventManagerMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new SettingsMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new AlprListsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, streamToAnalyticsResolver),
@@ -90,7 +87,6 @@ public class MigratorApplication {
                 new AlprListEventsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, streamToAnalyticsResolver),
                 new AlprHourlyStatsMigrator(sourceJdbcTemplate, destinationJdbcTemplate, streamToAnalyticsResolver),
                 new AlprSpeedRulesMigrator(sourceJdbcTemplate, destinationJdbcTemplate, streamToAnalyticsResolver),
-                new AlprSpeedRuleEventsMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new TrafficStatMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new StatsTrafficMigrator(sourceJdbcTemplate, destinationJdbcTemplate),
                 new GenderAgeStatMigrator(sourceJdbcTemplate, destinationJdbcTemplate),

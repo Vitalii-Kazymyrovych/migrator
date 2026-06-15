@@ -41,6 +41,8 @@ abstract class BaseMigratorSupport {
             return;
         }
 
+        destinationJdbcTemplate.execute("TRUNCATE TABLE " + destinationTable + " RESTART IDENTITY CASCADE");
+
         List<Map<String, Object>> rows = new ArrayList<>(rawRows.size());
         for (Map<String, Object> rawRow : rawRows) {
             rows.add(rowCustomizer.apply(new LinkedHashMap<>(rawRow)));

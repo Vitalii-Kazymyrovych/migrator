@@ -30,6 +30,11 @@ public class AlprDetectionsMigrator extends BaseMigratorSupport implements Table
     }
 
     @Override
+    public List<String> getSourceTables() {
+        return List.of("alpr_plates");
+    }
+
+    @Override
     public void migrate() {
         List<Map<String, Object>> sourceRows = sourceJdbcTemplate.queryForList("SELECT * FROM alpr_plates");
         if (sourceRows.isEmpty()) {
@@ -66,11 +71,10 @@ public class AlprDetectionsMigrator extends BaseMigratorSupport implements Table
     }
 
     private Map<String, Object> transform(Map<String, Object> row) {
-        int streamId = ((Number) row.get("stream_id")).intValue();
-        Integer analyticsId = streamToAnalyticsResolver.getFirstByPlugin(streamId, ALPR_PLUGIN).orElse(null);
+        Integer analyticsId = toInteger(row.get("va_id"));
         if (analyticsId == null) {
-            analyticsId = toInteger(row.get("va_id"));
-            log.warn("No ALPR analytics mapping found for alpr_plates.id={}, fallback va_id={}", row.get("id"), analyticsId);
+            int streamId = ((Number) row.get("stream_id")).intValue();
+            analyticsId = streamToAnalyticsResolver.getFirstByPlugin(streamId, ALPR_PLUGIN).orElse(null);
         }
 
         Map<String, Object> transformed = new LinkedHashMap<>();

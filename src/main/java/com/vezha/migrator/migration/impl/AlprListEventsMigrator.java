@@ -96,9 +96,12 @@ public class AlprListEventsMigrator extends BaseMigratorSupport implements Table
     }
 
     private Map<String, Object> transform(Map<String, Object> row) {
-        int streamId = ((Number) row.get("stream_id")).intValue();
-        Integer analyticsId = streamToAnalyticsResolver.getFirstByPlugin(streamId, ALPR_PLUGIN)
-                .orElse(toInteger(row.get("va_id")));
+        Integer analyticsId = toInteger(row.get("va_id"));
+        if  (analyticsId == null) {
+            int streamId = ((Number) row.get("stream_id")).intValue();
+            analyticsId = streamToAnalyticsResolver.getFirstByPlugin(streamId, ALPR_PLUGIN)
+                    .orElse(toInteger(row.get("va_id")));
+        }
 
         Map<String, Object> transformed = new LinkedHashMap<>();
         transformed.put("id", row.get("id"));
@@ -117,8 +120,8 @@ public class AlprListEventsMigrator extends BaseMigratorSupport implements Table
         transformed.put("frame_image", row.get("frame_image"));
         transformed.put("make_model_id", row.get("make_model_id"));
         transformed.put("vehicle_type", row.get("vehicle_type"));
-        transformed.put("color_id", row.get("color_id"));
-        transformed.put("direction", row.get("direction"));
+        transformed.put("color_id", row.get("color_id") == null ? 0 : row.get("color_id"));
+        transformed.put("direction", row.get("direction") == null ? 0 : row.get("direction"));
         transformed.put("country", row.get("country"));
         transformed.put("pattern", row.get("pattern"));
         transformed.put("client_id", row.get("client_id"));

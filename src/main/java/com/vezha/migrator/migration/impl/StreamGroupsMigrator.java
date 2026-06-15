@@ -38,6 +38,9 @@ public class StreamGroupsMigrator extends BaseMigratorSupport implements TableMi
             return;
         }
 
+        destinationJdbcTemplate.execute("TRUNCATE TABLE analytics_groups RESTART IDENTITY CASCADE");
+        destinationJdbcTemplate.execute("TRUNCATE TABLE stream_groups RESTART IDENTITY CASCADE");
+
         destinationJdbcTemplate.batchUpdate(
                 "INSERT INTO stream_groups (id, parent_id, name, client_id) OVERRIDING SYSTEM VALUE VALUES (?, ?, ?, ?)",
                 rows,

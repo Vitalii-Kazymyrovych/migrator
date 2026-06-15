@@ -31,6 +31,11 @@ public class AlprHourlyStatsMigrator extends BaseMigratorSupport implements Tabl
     }
 
     @Override
+    public List<String> getSourceTables() {
+        return List.of("alpr_stats_hourly");
+    }
+
+    @Override
     public void migrate() {
         List<Map<String, Object>> rows = sourceJdbcTemplate.queryForList("SELECT * FROM alpr_stats_hourly");
         if (rows.isEmpty()) {

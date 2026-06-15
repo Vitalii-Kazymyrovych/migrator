@@ -45,6 +45,8 @@ public class StatsTrafficMigrator extends BaseMigratorSupport implements TableMi
             return;
         }
 
+        destinationJdbcTemplate.execute("TRUNCATE TABLE stats_traffic_minutely RESTART IDENTITY CASCADE");
+
         List<Map<String, Object>> mergedRows = new ArrayList<>(hourlyRows.size() + minutelyRows.size());
         hourlyRows.forEach(row -> mergedRows.add(stripId(row)));
         minutelyRows.forEach(row -> mergedRows.add(stripId(row)));

@@ -60,6 +60,15 @@ public class MigrationOrchestrator {
         targetSchemaInspector.load(configModel);
 
         Map<String, ConfigModel.TableConfig> tables = configModel.getMigration().getTables();
+
+        migrators.stream()
+                .filter(migrator -> isEnabled(tables, migrator.tableName()))
+                .filter(this::validateSourceTables)
+                .filter(migrator -> targetSchemaInspector.tableExists(migrator.getTargetTable()))
+                .forEach(migrator -> destinationJdbcTemplate.execute(
+                        "TRUNCATE TABLE " + migrator.getTargetTable() + " RESTART IDENTITY CASCADE"));
+        destinationJdbcTemplate.execute("TRUNCATE TABLE analytics_groups RESTART IDENTITY CASCADE");
+
         migrators.stream()
                 .filter(migrator -> isEnabled(tables, migrator.tableName()))
                 .forEach(this::runIfTablesExist);

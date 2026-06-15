@@ -78,7 +78,7 @@ public class SourceSchemaInspector {
             return "SELECT table_name FROM user_tables";
         }
         if (configModel.getSource().getH2().isEnabled()) {
-            return "SELECT table_name FROM information_schema.tables WHERE table_schema = 'PUBLIC'";
+            return "SELECT table_name FROM information_schema.tables WHERE UPPER(table_schema) = 'VIDEOANALYTICS'";
         }
         return null;
     }
